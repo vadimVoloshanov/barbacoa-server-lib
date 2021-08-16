@@ -167,10 +167,10 @@ protected:
 
     void process_signal(int signal)
     {
-        if (_processinf_signal)
+        if (_processing_signal)
             return;
 
-        _processinf_signal = true;
+        _processing_signal = true;
 
 #ifndef NDEBUG
         fprintf(stderr, "Got signal %d\n", signal);
@@ -260,7 +260,7 @@ private:
     std::mutex _process_fail_config_lock;
     fail_callback_type _fail_callback = nullptr;
 
-    bool _processinf_signal = false; // block reenter
+    bool _processing_signal = false; // block reenter
 }; // namespace server_lib
 
 int mt_server_impl::run(main_loop& e,
