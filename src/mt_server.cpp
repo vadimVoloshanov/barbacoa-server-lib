@@ -167,6 +167,11 @@ protected:
 
     void process_signal(int signal)
     {
+        if (_processinf_signal)
+            return;
+
+        _processinf_signal = true;
+
 #ifndef NDEBUG
         fprintf(stderr, "Got signal %d\n", signal);
 #endif
@@ -183,6 +188,8 @@ protected:
             if (crash_dump_file_path_[0])
             {
                 emergency_helper::save_dump(crash_dump_file_path_);
+
+                abort(); // this gives more info in core dump
 
                 // it maybe fail here but dump has been saved already
                 this->process_fail(crash_dump_file_path_);
@@ -252,6 +259,8 @@ private:
     exit_callback_type _exit_callback = nullptr;
     std::mutex _process_fail_config_lock;
     fail_callback_type _fail_callback = nullptr;
+
+    bool _processinf_signal = false; // block reenter
 }; // namespace server_lib
 
 int mt_server_impl::run(main_loop& e,
