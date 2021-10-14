@@ -35,6 +35,7 @@ set(SERVER_LIB_SOURCES
     "${CMAKE_CURRENT_SOURCE_DIR}/src/signal_helper.cpp"
     "${CMAKE_CURRENT_SOURCE_DIR}/src/fs_helper.cpp"
     "${CMAKE_CURRENT_SOURCE_DIR}/src/version.cpp"
+    "${CMAKE_CURRENT_SOURCE_DIR}/src/memory_info.cpp"
     "${CMAKE_CURRENT_SOURCE_DIR}/src/thread_local_storage.cpp"
     "${CMAKE_CURRENT_SOURCE_DIR}/src/network/app_unit.cpp"
     "${CMAKE_CURRENT_SOURCE_DIR}/src/network/app_units_builder.cpp"
