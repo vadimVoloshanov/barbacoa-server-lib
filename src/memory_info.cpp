@@ -24,19 +24,27 @@ float get_memory_used_percents_cached(size_t cache_timeout_ms)
 
 #if defined(SERVER_LIB_PLATFORM_LINUX)
 
-#include <sys/sysinfo.h>
-
 float get_memory_used_percents()
 {
-    struct sysinfo mem_info;
-    sysinfo(&mem_info);
-
-    long long totalPhysMem = mem_info.totalram;
-    long long physMemUsed = mem_info.totalram - mem_info.freeram - mem_info.bufferram;
-
-    if (totalPhysMem == 0)
+    char buff[128];
+    FILE* fd = fopen("/proc/meminfo", "r");
+    if (!fd)
         return 0.0f;
 
+    unsigned long totalPhysMem, memFree, memBuffers, memCached;
+
+    bool success = (fgets(buff, sizeof(buff), fd) && sscanf(buff, "MemTotal: %lu ", &totalPhysMem) == 1
+                    && fgets(buff, sizeof(buff), fd) && sscanf(buff, "MemFree: %lu ", &memFree) == 1
+                    && fgets(buff, sizeof(buff), fd)
+                    && fgets(buff, sizeof(buff), fd) && sscanf(buff, "Buffers: %lu ", &memBuffers) == 1
+                    && fgets(buff, sizeof(buff), fd) && sscanf(buff, "Cached: %lu ", &memCached) == 1);
+
+    fclose(fd);
+
+    if (!success)
+        return 0.0f;
+
+    unsigned long physMemUsed = totalPhysMem - (memFree + memCached + memBuffers);
     return (double(physMemUsed) / totalPhysMem) * 100.0f;
 }
 
