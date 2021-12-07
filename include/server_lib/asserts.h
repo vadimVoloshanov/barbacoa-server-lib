@@ -1,6 +1,7 @@
 #pragma once
 
 #include <server_lib/platform_config.h>
+#include <server_lib/logging_helper.h>
 
 #include <boost/preprocessor/stringize.hpp>
 
@@ -26,13 +27,13 @@
 #define SRV_PLATFORM_ASSERT_(TEST, _)
 #endif
 
-#define SRV_ASSERT(TEST, ...)                                                                     \
-    SRV_EXPAND_MACRO(                                                                             \
-        SRV_MULTILINE_MACRO_BEGIN if (!(TEST)) {                                                  \
-            SRV_PLATFORM_ASSERT_(TEST, SRV_PLATFORM_STR_(#TEST))                                  \
-            std::string s_what { __FILE__ " (" BOOST_PP_STRINGIZE(__LINE__) ") -> " #TEST ": " }; \
-            s_what += std::string { __VA_ARGS__ };                                                \
-            SRV_THROW_EXCEPTION(std::logic_error, s_what.c_str());                                \
+#define SRV_ASSERT(TEST, ...)                                                                                                                  \
+    SRV_EXPAND_MACRO(                                                                                                                          \
+        SRV_MULTILINE_MACRO_BEGIN if (!(TEST)) {                                                                                               \
+            SRV_PLATFORM_ASSERT_(TEST, SRV_PLATFORM_STR_(#TEST))                                                                               \
+            std::string s_what { std::string(server_lib::trim_file_path(__FILE__)) + (" (" BOOST_PP_STRINGIZE(__LINE__) ") -> " #TEST ": ") }; \
+            s_what += std::string { __VA_ARGS__ };                                                                                             \
+            SRV_THROW_EXCEPTION(std::logic_error, s_what.c_str());                                                                             \
         } SRV_MULTILINE_MACRO_END)
 
 #define SRV_ERROR(...) \
