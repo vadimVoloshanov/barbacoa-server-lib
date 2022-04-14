@@ -45,10 +45,21 @@ public:
 #if defined(SERVER_LIB_PLATFORM_WINDOWS)
         std::replace(m_file.begin(), _file.end(), '\\', '/');
 #endif
-        auto start_pos = _file.find(PROJECT_SOURCE_DIR);
+        {
+            auto start_pos = _file.find(PROJECT_SOURCE_DIR);
 
-        if (start_pos != std::string::npos)
-            _file.erase(start_pos, sizeof(PROJECT_SOURCE_DIR));
+            if (start_pos != std::string::npos)
+                _file.erase(start_pos, sizeof(PROJECT_SOURCE_DIR));
+        }
+#endif
+
+#if defined(PROJECT_SOURCE_DIR_TRIM_PATH)
+        {
+            auto start_pos_trim = _file.find(PROJECT_SOURCE_DIR_TRIM_PATH);
+
+            if (start_pos_trim != std::string::npos)
+                _file = _file.substr(start_pos_trim + sizeof(PROJECT_SOURCE_DIR_TRIM_PATH));
+        }
 #endif
     }
 
