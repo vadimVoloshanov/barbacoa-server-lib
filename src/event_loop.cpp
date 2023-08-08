@@ -97,6 +97,7 @@ void event_loop::start(std::function<void(void)> start_notify, std::function<voi
 
     _is_main.store(is_main_loop());
 
+    _pservice->restart();
     _loop_maintainer = boost::in_place(std::ref(*_pservice));
 
     post([this, start_notify]() {
@@ -144,15 +145,25 @@ void event_loop::start(std::function<void(void)> start_notify, std::function<voi
 void event_loop::stop()
 {
     if (!is_running())
+    {
+        SRV_LOGC_TRACE("Event loop is not running");
         return;
+    }
 
     SRV_LOGC_INFO(SRV_FUNCTION_NAME_);
 
     _loop_maintainer = boost::none; //finishing loop
+
+    SRV_LOGC_TRACE("pservice->stop()");
     _pservice->stop();
 
+    SRV_LOGC_TRACE("_thread->joinable()");
     if (_thread && _thread->joinable())
+    {
         _thread->join();
+    }
+
+    SRV_LOGC_TRACE("_thread.reset()");
     _thread.reset();
 
     _is_running.store(false);
