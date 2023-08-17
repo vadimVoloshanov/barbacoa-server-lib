@@ -311,6 +311,9 @@ void logger::write(log_message& msg)
         {
             appender(msg);
         }
+
+        if (_force_flush)
+            flush();
     }
 }
 

@@ -78,6 +78,8 @@ public:
 
     void flush();
 
+    void set_force_flush(bool force_flush) { _force_flush = force_flush; }
+
 private:
     void add_syslog_destination();
     void add_stdout_destination();
@@ -87,5 +89,6 @@ private:
 private:
     std::vector<log_handler_type> _appenders;
     int _filter = 0;
+    bool _force_flush = false;
 };
 } // namespace server_lib
