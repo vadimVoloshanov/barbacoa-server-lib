@@ -48,6 +48,7 @@ public:
     {
         log_context context;
         std::stringstream message;
+        uint64_t time = 0;
     };
 
     using log_handler_type = std::function<void(const log_message&)>;
