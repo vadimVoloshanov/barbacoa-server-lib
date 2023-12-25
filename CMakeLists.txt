@@ -26,7 +26,7 @@ include_directories( ${Boost_INCLUDE_DIR} )
 add_subdirectory( libs )
 
 set(SERVER_LIB_SOURCES
-    "${CMAKE_CURRENT_SOURCE_DIR}/src/logger_bus.cpp"
+    "${CMAKE_CURRENT_SOURCE_DIR}/src/log_accumulator.cpp"
     "${CMAKE_CURRENT_SOURCE_DIR}/src/logger.cpp"
     "${CMAKE_CURRENT_SOURCE_DIR}/src/emergency_helper.cpp"
     "${CMAKE_CURRENT_SOURCE_DIR}/src/event_loop.cpp"

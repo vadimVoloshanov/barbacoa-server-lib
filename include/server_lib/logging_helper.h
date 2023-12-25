@@ -9,7 +9,7 @@
 #include <sstream>
 
 #include <server_lib/logger.h>
-#include <server_lib/logger_bus.h>
+#include <server_lib/log_accumulator.h>
 #include <server_lib/platform_config.h>
 
 #ifndef SRV_FUNCTION_NAME_
@@ -67,16 +67,17 @@ public:
     operator std::string() { return _file; }
 };
 
-#define LOG_LOG(LEVEL, FILE, LINE, FUNC, ARG)                       \
-    SRV_EXPAND_MACRO(                                               \
-        SRV_MULTILINE_MACRO_BEGIN {                                 \
-            server_lib::logger::log_message msg;                    \
-            msg.context.lv = LEVEL;                                 \
-            msg.context.file = server_lib::trim_file_path(FILE);    \
-            msg.context.line = LINE;                                \
-            msg.context.method = FUNC;                              \
-            msg.message << ARG;                                     \
-            server_lib::logger_bus::instance().put(std::move(msg)); \
+#define LOG_LOG(LEVEL, FILE, LINE, FUNC, ARG)                                                                                              \
+    SRV_EXPAND_MACRO(                                                                                                                      \
+        SRV_MULTILINE_MACRO_BEGIN {                                                                                                        \
+            server_lib::logger::log_message msg;                                                                                           \
+            msg.time = std::chrono::duration_cast<std::chrono::microseconds>(std::chrono::system_clock::now().time_since_epoch()).count(); \
+            msg.context.lv = LEVEL;                                                                                                        \
+            msg.context.file = server_lib::trim_file_path(FILE);                                                                           \
+            msg.context.line = LINE;                                                                                                       \
+            msg.context.method = FUNC;                                                                                                     \
+            msg.message << ARG;                                                                                                            \
+            server_lib::log_accumulator::instance().put(std::move(msg));                                                                   \
         } SRV_MULTILINE_MACRO_END)
 #endif
 
