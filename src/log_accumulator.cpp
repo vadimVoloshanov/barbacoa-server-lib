@@ -26,6 +26,7 @@ log_accumulator::~log_accumulator()
 void log_accumulator::init(size_t flush_period_ms, size_t limit_by_thread, size_t throttling_time_ms, size_t wait_flush,
                            size_t pre_init_logs_limit)
 {
+#if defined(_USE_LOG_ACCUMULATOR)
     _flush_period_ms.store(flush_period_ms);
     _limit_by_thread.store(limit_by_thread);
     _throttling_time_ms.store(throttling_time_ms);
@@ -78,6 +79,7 @@ void log_accumulator::init(size_t flush_period_ms, size_t limit_by_thread, size_
     LOG_INFO("Logger Accumulator init. Flus period ms: " << flush_period_ms << ", limit logs by thread before "
              << "throttling: " << limit_by_thread << ", throttling time in ms(for heavily spammy threads): "
              << throttling_time_ms);
+#endif
 }
 
 void log_accumulator::put(logger::log_message&& msg)
