@@ -21,6 +21,8 @@ log_accumulator::~log_accumulator()
         if (_thd.joinable())
             _thd.join();
     }
+
+    flush();
 }
 
 void log_accumulator::init(size_t flush_period_ms, size_t limit_by_thread, size_t throttling_time_ms, size_t wait_flush,
