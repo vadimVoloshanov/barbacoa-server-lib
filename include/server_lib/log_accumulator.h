@@ -43,7 +43,7 @@ private:
 
     std::atomic<bool> _execute;
     std::thread _thd;
-    std::shared_mutex _mutex;
+    std::mutex _mutex;
 
     std::atomic<size_t> _flush_period_ms = 500;
     std::atomic<size_t> _limit_by_thread = 100000;

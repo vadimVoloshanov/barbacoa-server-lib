@@ -38,12 +38,12 @@ void log_accumulator::init(size_t flush_period_ms, size_t limit_by_thread, size_
     {
         size_t logs_count = 0;
 
-        _mutex.lock_shared();
+        _mutex.lock();
 
         for (const auto& thread_logs : _logs[_act_index])
             logs_count += thread_logs.second.size();
 
-        _mutex.unlock_shared();
+        _mutex.unlock();
 
         if (logs_count > pre_init_logs_limit)
         {
@@ -114,11 +114,11 @@ void log_accumulator::put(logger::log_message&& msg)
 
     auto thread_id = std::this_thread::get_id();
 
-    _mutex.lock_shared();
+    _mutex.lock();
 
     bool thread_met = _logs[_act_index].count(thread_id) == 0;
 
-    _mutex.unlock_shared();
+    _mutex.unlock();
 
     if (!thread_met)
     {
