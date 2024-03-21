@@ -2,22 +2,25 @@
 
 #include <server_lib/logging_helper.h>
 
+#include <iostream>
+
 namespace server_lib {
 
 log_accumulator::log_accumulator()
-    : _act_index(0)
-    , _flush_active(false)
+    : _flush_active(false)
     , _new_set_force_flush(false)
     , _execute(true)
 {
     _logs.resize(2);
+    _active_container_p = &(_logs[0]);
+    _flush_container_p = &(_logs[1]);
 }
 
 log_accumulator::~log_accumulator()
 {
-    if (_execute.load(std::memory_order_acquire))
+    if (_execute)
     {
-        _execute.store(false, std::memory_order_release);
+        _execute.store(false);
         if (_thd.joinable())
             _thd.join();
     }
@@ -28,60 +31,39 @@ log_accumulator::~log_accumulator()
 void log_accumulator::init(size_t flush_period_ms, size_t limit_by_thread, size_t throttling_time_ms, size_t wait_flush,
                            size_t pre_init_logs_limit)
 {
-#if defined(_USE_LOG_ACCUMULATOR)
+// #if defined(_USE_LOG_ACCUMULATOR)
+
     _flush_period_ms.store(flush_period_ms);
     _limit_by_thread.store(limit_by_thread);
     _throttling_time_ms.store(throttling_time_ms);
     _wait_flush.store(wait_flush);
 
-    if (!_thd.joinable())
-    {
-        size_t logs_count = 0;
-
-        _mutex.lock();
-
-        for (const auto& thread_logs : _logs[_act_index])
-            logs_count += thread_logs.second.size();
-
-        _mutex.unlock();
-
-        if (logs_count > pre_init_logs_limit)
-        {
-            size_t logs_pop = logs_count - pre_init_logs_limit;
-
-            LOG_ERROR("Before initialization, " << logs_count << " logs were made. We delete the first " << logs_pop << " logs.");
-
-            _mutex.lock();
-
-            for (; logs_pop > 0; --logs_pop)
-            {
-                auto oldest_log = get_oldest_log();
-                _logs[_act_index][oldest_log.first].pop();
-            }
-
-            _mutex.unlock();
-        }
-
-        _thd = std::thread([this, flush_period_ms]() {
-            while (_execute.load(std::memory_order_acquire))
-            {
-                std::this_thread::sleep_for(std::chrono::milliseconds(_flush_period_ms.load(std::memory_order_relaxed)));
-                try
-                {
-                    flush();
-                }
-                catch (const std::exception& e)
-                {
-                    LOG_ERROR(e.what());
-                }
-            }
-        });
-    }
-
-    LOG_INFO("Logger Accumulator init. Flus period ms: " << flush_period_ms << ", limit logs by thread before "
+    LOG_INFO("Logger Accumulator init. Flush period ms: " << flush_period_ms << ", limit logs by thread before "
              << "throttling: " << limit_by_thread << ", throttling time in ms(for heavily spammy threads): "
              << throttling_time_ms);
-#endif
+
+    if (_thd.joinable())
+        return;
+
+    release_logs_pre_init(pre_init_logs_limit);
+
+    _thd = std::thread([this]() {
+        while (_execute.load())
+        {
+            std::this_thread::sleep_for(std::chrono::milliseconds(_flush_period_ms.load()));
+            try
+            {
+                if (!logger::instance().get_force_flush())
+                    flush();
+            }
+            catch (const std::exception& e)
+            {
+                LOG_ERROR(e.what());
+            }
+        }
+    });
+
+// #endif
 }
 
 void log_accumulator::put(logger::log_message&& msg)
@@ -92,19 +74,16 @@ void log_accumulator::put(logger::log_message&& msg)
         {
             _new_set_force_flush = true;
 
-            if (!_flush_active)
-                flush();
-            else
-            {
-                while (_flush_active)
-                    std::this_thread::sleep_for(std::chrono::milliseconds(_wait_flush.load(std::memory_order_relaxed)));
+            while (_flush_active)
+                std::this_thread::sleep_for(std::chrono::milliseconds(_wait_flush));
 
-                flush();
-            }
+            add_log_msg(std::move(msg));
+
+            flush();
         }
 
         while (_flush_active)
-            std::this_thread::sleep_for(std::chrono::milliseconds(_wait_flush.load(std::memory_order_relaxed)));
+            std::this_thread::sleep_for(std::chrono::milliseconds(_wait_flush));
 
         logger::instance().write(msg);
         return;
@@ -112,27 +91,63 @@ void log_accumulator::put(logger::log_message&& msg)
 
     _new_set_force_flush = false;
 
+    size_t count_by_thread = (*_active_container_p)[std::this_thread::get_id()].size();
+
+    add_log_msg(std::move(msg));
+
+    if (count_by_thread >= _limit_by_thread)
+        std::this_thread::sleep_for(std::chrono::milliseconds(_throttling_time_ms));
+}
+
+void log_accumulator::add_log_msg(logger::log_message&& msg)
+{
     auto thread_id = std::this_thread::get_id();
+
+    _mutex.lock_shared();
+
+    auto it = _active_container_p->find(thread_id);
+    auto* pqueue = it == _active_container_p->end() ? nullptr : &it->second;
+
+    if (pqueue)
+    {
+        pqueue->push(std::move(msg));
+        _mutex.unlock_shared();
+
+        return;
+    }
+
+    _mutex.unlock_shared();
+
+    _mutex.lock();
+    (*_active_container_p)[thread_id].push(std::move(msg));
+    _mutex.unlock();
+}
+
+void log_accumulator::release_logs_pre_init(size_t limit)
+{
+    size_t logs_count = 0;
 
     _mutex.lock();
 
-    bool thread_met = _logs[_act_index].count(thread_id) == 0;
+    for (const auto& thread_logs : *_active_container_p)
+        logs_count += thread_logs.second.size();
+
+    if (logs_count > limit)
+    {
+        size_t logs_pop = logs_count - limit;
+
+        LOG_WARN("Before initialization, " << logs_count << " logs were made. We delete the first " << logs_pop << " logs.");
+
+        for (; logs_pop > 0; --logs_pop)
+        {
+            auto oldest_log = get_oldest_log(_active_container_p);
+            (*_active_container_p)[oldest_log.first].pop();
+        }
+    }
 
     _mutex.unlock();
 
-    if (!thread_met)
-    {
-        _mutex.lock();
-
-        _logs[_act_index][thread_id].push(std::move(msg));
-
-        _mutex.unlock();
-    }
-    else
-        _logs[_act_index][thread_id].push(std::move(msg));
-
-    if (_logs[_act_index][thread_id].size() >= _limit_by_thread.load(std::memory_order_relaxed))
-        std::this_thread::sleep_for(std::chrono::milliseconds(_throttling_time_ms.load(std::memory_order_relaxed)));
+    flush();
 }
 
 void log_accumulator::flush()
@@ -142,33 +157,39 @@ void log_accumulator::flush()
 
     _flush_active = true;
 
-    _act_index = !_act_index;
+    _mutex.lock();
 
-    for (const auto& thread_logs : _logs[!_act_index])
+    auto temp = _active_container_p;
+    _active_container_p = _flush_container_p;
+    _flush_container_p = temp;
+
+    _mutex.unlock();
+
+    for (const auto& thread_logs : *_flush_container_p)
     {
-        if (thread_logs.second.size() >= _limit_by_thread.load(std::memory_order_relaxed))
+        if (thread_logs.second.size() >= _limit_by_thread)
             LOG_ERROR("Thread " << thread_logs.second.front().context.thread_info.first << " spam logs");
     }
 
     while (true)
     {
-        auto oldest_log = get_oldest_log();
+        auto oldest_log = get_oldest_log(_flush_container_p);
 
         if (oldest_log.second == 0)
             break;
 
-        logger::instance().write(_logs[!_act_index][oldest_log.first].front());
-        _logs[!_act_index][oldest_log.first].pop();
+        logger::instance().write((*_flush_container_p)[oldest_log.first].front());
+        (*_flush_container_p)[oldest_log.first].pop();
     }
 
     _flush_active = false;
 }
 
-std::pair<std::thread::id, uint64_t> log_accumulator::get_oldest_log()
+std::pair<std::thread::id, uint64_t> log_accumulator::get_oldest_log(map_logs* p)
 {
     std::pair<std::thread::id /*thread id*/, uint64_t /*time in ms*/> oldest_log = { std::thread::id(), 0 };
 
-    for (const auto& thread_logs : _logs[!_act_index])
+    for (const auto& thread_logs : *p)
     {
         if (thread_logs.second.empty())
             continue;

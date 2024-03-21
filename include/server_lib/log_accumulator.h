@@ -30,20 +30,24 @@ protected:
     friend class singleton<log_accumulator>;
 
 private:
+    void release_logs_pre_init(size_t limit);
+
+    void add_log_msg(logger::log_message&& msg);
     void flush();
 
-    std::pair<std::thread::id /*thread id*/, uint64_t /*time in ms*/> get_oldest_log();
+    std::pair<std::thread::id /*thread id*/, uint64_t /*time in ms*/> get_oldest_log(map_logs* p);
 
     std::vector<map_logs> _logs;
 
-    std::atomic<std::uint16_t> _act_index;
+    map_logs* _active_container_p;
+    map_logs* _flush_container_p;
 
     std::atomic<bool> _flush_active;
     std::atomic<bool> _new_set_force_flush;
 
     std::atomic<bool> _execute;
     std::thread _thd;
-    std::mutex _mutex;
+    std::shared_mutex _mutex;
 
     std::atomic<size_t> _flush_period_ms = 500;
     std::atomic<size_t> _limit_by_thread = 100000;
