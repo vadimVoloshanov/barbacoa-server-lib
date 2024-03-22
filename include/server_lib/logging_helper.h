@@ -73,6 +73,7 @@ public:
         SRV_MULTILINE_MACRO_BEGIN {                                                                                                        \
             server_lib::logger::log_message msg;                                                                                           \
             msg.time = std::chrono::duration_cast<std::chrono::microseconds>(std::chrono::system_clock::now().time_since_epoch()).count(); \
+            msg.steady_time = std::chrono::steady_clock::now();                                                                            \
             msg.context.lv = LEVEL;                                                                                                        \
             msg.context.file = server_lib::trim_file_path(FILE);                                                                           \
             msg.context.line = LINE;                                                                                                       \

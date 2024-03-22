@@ -35,7 +35,7 @@ private:
     void add_log_msg(logger::log_message&& msg);
     void flush();
 
-    std::pair<std::thread::id /*thread id*/, uint64_t /*time in ms*/> get_oldest_log(map_logs* p);
+    std::optional<std::thread::id> get_oldest_log_thread_id(map_logs* p);
 
     std::vector<map_logs> _logs;
 

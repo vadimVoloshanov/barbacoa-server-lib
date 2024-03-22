@@ -1,5 +1,6 @@
 #pragma once
 
+#include <chrono>
 #include <functional>
 #include <string>
 #include <sstream>
@@ -49,6 +50,7 @@ public:
         log_context context;
         std::stringstream message;
         uint64_t time = 0;
+        std::chrono::steady_clock::time_point steady_time;
     };
 
     using log_handler_type = std::function<void(const log_message&)>;

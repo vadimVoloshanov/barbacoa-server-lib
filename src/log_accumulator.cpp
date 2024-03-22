@@ -1,5 +1,6 @@
 #include <server_lib/log_accumulator.h>
 
+#include <server_lib/asserts.h>
 #include <server_lib/logging_helper.h>
 
 #include <iostream>
@@ -31,7 +32,7 @@ log_accumulator::~log_accumulator()
 void log_accumulator::init(size_t flush_period_ms, size_t limit_by_thread, size_t throttling_time_ms, size_t wait_flush,
                            size_t pre_init_logs_limit)
 {
-// #if defined(_USE_LOG_ACCUMULATOR)
+#if defined(_USE_LOG_ACCUMULATOR)
 
     _flush_period_ms.store(flush_period_ms);
     _limit_by_thread.store(limit_by_thread);
@@ -63,7 +64,7 @@ void log_accumulator::init(size_t flush_period_ms, size_t limit_by_thread, size_
         }
     });
 
-// #endif
+#endif
 }
 
 void log_accumulator::put(logger::log_message&& msg)
@@ -140,8 +141,9 @@ void log_accumulator::release_logs_pre_init(size_t limit)
 
         for (; logs_pop > 0; --logs_pop)
         {
-            auto oldest_log = get_oldest_log(_active_container_p);
-            (*_active_container_p)[oldest_log.first].pop();
+            auto thread_id = get_oldest_log_thread_id(_active_container_p);
+            SRV_ASSERT(thread_id, "The logs couldn't end");
+            (*_active_container_p)[*thread_id].pop();
         }
     }
 
@@ -173,32 +175,41 @@ void log_accumulator::flush()
 
     while (true)
     {
-        auto oldest_log = get_oldest_log(_flush_container_p);
+        auto thread_id = get_oldest_log_thread_id(_flush_container_p);
 
-        if (oldest_log.second == 0)
+        if (!thread_id)
             break;
 
-        logger::instance().write((*_flush_container_p)[oldest_log.first].front());
-        (*_flush_container_p)[oldest_log.first].pop();
+        logger::instance().write((*_flush_container_p)[*thread_id].front());
+        (*_flush_container_p)[*thread_id].pop();
     }
 
     _flush_active = false;
 }
 
-std::pair<std::thread::id, uint64_t> log_accumulator::get_oldest_log(map_logs* p)
+std::optional<std::thread::id> log_accumulator::get_oldest_log_thread_id(map_logs* p)
 {
-    std::pair<std::thread::id /*thread id*/, uint64_t /*time in ms*/> oldest_log = { std::thread::id(), 0 };
+    std::pair<std::thread::id, std::chrono::steady_clock::time_point> oldest_log;
+
+    bool found = false;
 
     for (const auto& thread_logs : *p)
     {
         if (thread_logs.second.empty())
             continue;
 
-        if (oldest_log.second == 0 || oldest_log.second > thread_logs.second.front().time)
-            oldest_log = { thread_logs.first, thread_logs.second.front().time };
+        if (!found)
+        {
+            found = true;
+            oldest_log = { thread_logs.first, thread_logs.second.front().steady_time };
+            continue;
+        }
+
+        if (oldest_log.second > thread_logs.second.front().steady_time)
+            oldest_log = { thread_logs.first, thread_logs.second.front().steady_time };
     }
 
-    return oldest_log;
+    return found ? std::make_optional(std::move(oldest_log.first)) : std::nullopt;
 }
 
 } // namespace server_lib
