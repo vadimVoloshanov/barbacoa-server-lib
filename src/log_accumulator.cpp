@@ -73,7 +73,8 @@ void log_accumulator::put(logger::log_message&& msg)
     {
         if (!_new_set_force_flush)
         {
-            _new_set_force_flush = true;
+            static std::mutex guard;
+            const std::lock_guard<std::mutex> lock(guard);
 
             while (_flush_active)
                 std::this_thread::sleep_for(std::chrono::milliseconds(_wait_flush));
@@ -81,10 +82,10 @@ void log_accumulator::put(logger::log_message&& msg)
             add_log_msg(std::move(msg));
 
             flush();
-        }
+            flush();
 
-        while (_flush_active)
-            std::this_thread::sleep_for(std::chrono::milliseconds(_wait_flush));
+            _new_set_force_flush = true;
+        }
 
         logger::instance().write(msg);
         return;
@@ -154,16 +155,14 @@ void log_accumulator::release_logs_pre_init(size_t limit)
 
 void log_accumulator::flush()
 {
+    _mutex.lock();
+
     if (_flush_active)
         return;
 
     _flush_active = true;
 
-    _mutex.lock();
-
-    auto temp = _active_container_p;
-    _active_container_p = _flush_container_p;
-    _flush_container_p = temp;
+    std::swap(_active_container_p, _flush_container_p);
 
     _mutex.unlock();
 
@@ -189,27 +188,22 @@ void log_accumulator::flush()
 
 std::optional<std::thread::id> log_accumulator::get_oldest_log_thread_id(map_logs* p)
 {
-    std::pair<std::thread::id, std::chrono::steady_clock::time_point> oldest_log;
-
-    bool found = false;
+    std::thread::id thread_id(0);
+    std::chrono::steady_clock::time_point oldest_time;
 
     for (const auto& thread_logs : *p)
     {
         if (thread_logs.second.empty())
             continue;
 
-        if (!found)
+        if (thread_id == std::thread::id(0) || oldest_time > thread_logs.second.front().steady_time)
         {
-            found = true;
-            oldest_log = { thread_logs.first, thread_logs.second.front().steady_time };
-            continue;
+            thread_id = thread_logs.first;
+            oldest_time = thread_logs.second.front().steady_time;
         }
-
-        if (oldest_log.second > thread_logs.second.front().steady_time)
-            oldest_log = { thread_logs.first, thread_logs.second.front().steady_time };
     }
 
-    return found ? std::make_optional(std::move(oldest_log.first)) : std::nullopt;
+    return thread_id == std::thread::id(0) ? std::make_optional(std::move(thread_id)) : std::nullopt;
 }
 
 } // namespace server_lib

@@ -97,6 +97,6 @@ private:
 private:
     std::vector<log_handler_type> _appenders;
     int _filter = 0;
-    bool _force_flush = false;
+    std::atomic<bool> _force_flush = false;
 };
 } // namespace server_lib
