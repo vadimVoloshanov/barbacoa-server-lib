@@ -203,7 +203,7 @@ std::optional<std::thread::id> log_accumulator::get_oldest_log_thread_id(map_log
         }
     }
 
-    return thread_id == std::thread::id(0) ? std::make_optional(std::move(thread_id)) : std::nullopt;
+    return thread_id != std::thread::id(0) ? std::make_optional(std::move(thread_id)) : std::nullopt;
 }
 
 } // namespace server_lib
