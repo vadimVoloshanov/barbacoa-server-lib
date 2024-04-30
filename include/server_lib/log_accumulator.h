@@ -53,6 +53,8 @@ private:
     std::atomic<size_t> _limit_by_thread = 100000;
     std::atomic<size_t> _throttling_time_ms = 1;
     std::atomic<size_t> _wait_flush = 50;
+
+    uint64_t last_flush_time_ms = 0;
 };
 
 } // namespace server_lib

@@ -15,6 +15,8 @@ log_accumulator::log_accumulator()
     _logs.resize(2);
     _active_container_p = &(_logs[0]);
     _flush_container_p = &(_logs[1]);
+
+    last_flush_time_ms = std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::system_clock::now().time_since_epoch()).count();
 }
 
 log_accumulator::~log_accumulator()
@@ -97,8 +99,8 @@ void log_accumulator::put(logger::log_message&& msg)
 
     add_log_msg(std::move(msg));
 
-    if (count_by_thread >= _limit_by_thread)
-        std::this_thread::sleep_for(std::chrono::milliseconds(_throttling_time_ms));
+    // if (count_by_thread >= _limit_by_thread)
+    //     std::this_thread::sleep_for(std::chrono::milliseconds(_throttling_time_ms));
 }
 
 void log_accumulator::add_log_msg(logger::log_message&& msg)
@@ -165,6 +167,40 @@ void log_accumulator::flush()
     std::swap(_active_container_p, _flush_container_p);
 
     _mutex.unlock();
+
+    ////////////////////////////////////////////////////////////////////////////
+    static size_t flush_n = 1;
+
+    size_t msg_count = 0;
+
+    for (auto& thread_logs : *_flush_container_p)
+    {
+        msg_count += thread_logs.second.size();
+
+        std::queue<logger::log_message> empty;
+        std::swap(thread_logs.second, empty);
+    }
+
+    _flush_active = false;
+
+    uint64_t now_ms = std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::system_clock::now().time_since_epoch()).count();
+
+    auto time = now_ms - last_flush_time_ms;
+    auto avg_count_by_10k = time / (msg_count / 10000.0);
+
+    if (msg_count >= 10000)
+        std::cout << "Flush №: " << flush_n << ". Log accamulate: " << msg_count / 1000 << "k. Time spent(ms): "
+        << time << ". Avg time per 10k logs: " << avg_count_by_10k << " ms." << std::endl;
+    else
+        std::cout << "Flush №: " << flush_n << ". Log accamulate: " << msg_count << ". Time spent(ms): "
+        << time << ". Avg time per 10k logs: " << avg_count_by_10k << " ms." << std::endl;
+
+    last_flush_time_ms = now_ms;
+
+    ++flush_n;
+
+    return;
+    ////////////////////////////////////////////////////////////////////////////
 
     for (const auto& thread_logs : *_flush_container_p)
     {
