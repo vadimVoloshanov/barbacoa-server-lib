@@ -123,24 +123,31 @@ void logger::add_boost_log_destination(const SinkTypePtr &sink, const std::strin
         return boost::log::trivial::trace;
     };
 
-    auto level_to_str = [](level lv) -> std::string {
+    auto level_to_str = [](level lv) -> const std::string& {
+        static const std::string fatal_str {"fatal"};
+        static const std::string error_str {"error"};
+        static const std::string warning_str {"warning"};
+        static const std::string info_str {"info"};
+        static const std::string debug_str {"debug"};
+        static const std::string trace_str {"trace"};
+
         switch (lv)
         {
         case server_lib::logger::level::fatal:
-            return "fatal";
+            return fatal_str;
         case server_lib::logger::level::error:
-            return "error";
+            return error_str;
         case server_lib::logger::level::warning:
-            return "warning";
+            return warning_str;
         case server_lib::logger::level::info:
-            return "info";
+            return info_str;
         case server_lib::logger::level::debug:
-            return "debug";
+            return debug_str;
         case server_lib::logger::level::trace:
-            return "trace";
+            return trace_str;
         }
 
-        return "trace";
+        return trace_str;
     };
 
     namespace expr = boost::log::expressions;

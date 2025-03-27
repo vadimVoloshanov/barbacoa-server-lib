@@ -105,7 +105,6 @@ void log_accumulator::put(logger::log_message&& msg)
 void log_accumulator::add_log_msg(logger::log_message&& msg)
 {
     auto thread_id = std::this_thread::get_id();
-    size_t count_by_thread = 0;
 
     _mutex.lock_shared();
 
@@ -114,7 +113,7 @@ void log_accumulator::add_log_msg(logger::log_message&& msg)
     {
         auto& queue = it->second;
         queue.push(std::move(msg));
-        count_by_thread = queue.size();
+        size_t count_by_thread = queue.size();
         _mutex.unlock_shared();
 
         if (count_by_thread >= _limit_by_thread)
@@ -147,9 +146,9 @@ void log_accumulator::release_logs_pre_init(size_t limit)
 
         for (; logs_pop > 0; --logs_pop)
         {
-            auto thread_id = get_oldest_log_thread_id(_active_container_p);
-            SRV_ASSERT(thread_id, "The logs couldn't end");
-            (*_active_container_p)[*thread_id].pop();
+            auto thread_ptr = get_oldest_log_thread(_active_container_p);
+            SRV_ASSERT(thread_ptr, "The logs couldn't end");
+            thread_ptr->pop();
         }
     }
 
@@ -174,41 +173,36 @@ void log_accumulator::flush()
     for (const auto& thread_logs : *_flush_container_p)
     {
         if (thread_logs.second.size() >= _limit_by_thread)
-            LOG_ERROR("Thread " << thread_logs.second.front().context.thread_info.first << " spam logs");
+            LOG_ERROR("Thread " << thread_logs.second.front().context.thread_info.first << " spams logs");
     }
 
-    while (true)
+    while (auto thread_ptr = get_oldest_log_thread(_flush_container_p))
     {
-        auto thread_id = get_oldest_log_thread_id(_flush_container_p);
-
-        if (!thread_id)
-            break;
-
-        logger::instance().write((*_flush_container_p)[*thread_id].front());
-        (*_flush_container_p)[*thread_id].pop();
+        logger::instance().write(thread_ptr->front());
+        thread_ptr->pop();
     }
 
     _flush_active = false;
 }
 
-std::optional<std::thread::id> log_accumulator::get_oldest_log_thread_id(map_logs* p)
+log_accumulator::logs_thread_ptr log_accumulator::get_oldest_log_thread(map_logs* p)
 {
-    std::thread::id thread_id(0);
+    logs_thread_ptr thread_ptr = nullptr;
     std::chrono::steady_clock::time_point oldest_time;
 
-    for (const auto& thread_logs : *p)
+    for (auto& thread_logs : *p)
     {
         if (thread_logs.second.empty())
             continue;
 
-        if (thread_id == std::thread::id(0) || oldest_time > thread_logs.second.front().steady_time)
+        if (thread_ptr == nullptr || oldest_time > thread_logs.second.front().steady_time)
         {
-            thread_id = thread_logs.first;
+            thread_ptr = &thread_logs.second;
             oldest_time = thread_logs.second.front().steady_time;
         }
     }
 
-    return thread_id != std::thread::id(0) ? std::make_optional(std::move(thread_id)) : std::nullopt;
+    return thread_ptr;
 }
 
 } // namespace server_lib

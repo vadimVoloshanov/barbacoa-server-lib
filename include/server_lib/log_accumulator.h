@@ -13,7 +13,9 @@ namespace server_lib {
 
 class log_accumulator : public singleton<log_accumulator>
 {
-    using map_logs = std::map<std::thread::id, std::queue<logger::log_message>>;
+    using logs_thread = std::queue<logger::log_message>;
+    using logs_thread_ptr = logs_thread*;
+    using map_logs = std::map<std::thread::id, logs_thread>;
 
 public:
     virtual ~log_accumulator();
@@ -35,7 +37,7 @@ private:
     void add_log_msg(logger::log_message&& msg);
     void flush();
 
-    std::optional<std::thread::id> get_oldest_log_thread_id(map_logs* p);
+    logs_thread_ptr get_oldest_log_thread(map_logs* p);
 
     std::vector<map_logs> _logs;
 
