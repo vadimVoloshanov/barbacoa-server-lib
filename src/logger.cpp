@@ -163,19 +163,13 @@ void logger::add_boost_log_destination(const SinkTypePtr &sink, const std::strin
     sources::logger lg;
 
     auto time_to_str = [](int64_t long_date) {
-        char buff[128];
-
         auto microseconds = long_date % 1000000;
-        auto without_microseconds = long_date / 1000;
+        auto seconds = long_date / 1000000;
 
-        std::chrono::duration<int64_t, std::milli> dur(without_microseconds);
-        auto tp = std::chrono::system_clock::time_point(std::chrono::duration_cast<std::chrono::system_clock::duration>(dur));
-        std::time_t in_time_t = std::chrono::system_clock::to_time_t(tp);
-        strftime(buff, 128, "%Y-%m-%d_%H:%M:%S", localtime(&in_time_t));
-        std::string res_date(buff);
-        res_date += "." + std::to_string(microseconds);
-
-        return res_date;
+        std::stringstream ss;
+        ss << std::put_time(std::localtime(&seconds), "%Y-%m-%d_%H:%M:%S");
+        ss << "." << std::setfill('0') << std::setw(6) << microseconds;
+        return ss.str();
     };
 
     auto boost_write = [=](const log_message& msg) {

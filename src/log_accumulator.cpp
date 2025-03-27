@@ -8,9 +8,6 @@
 namespace server_lib {
 
 log_accumulator::log_accumulator()
-    : _flush_active(false)
-    , _new_set_force_flush(false)
-    , _execute(true)
 {
     _logs.resize(2);
     _active_container_p = &(_logs[0]);
@@ -38,10 +35,11 @@ void log_accumulator::init(size_t flush_period_ms, size_t limit_by_thread, size_
     _limit_by_thread.store(limit_by_thread);
     _throttling_time_ms.store(throttling_time_ms);
     _wait_flush.store(wait_flush);
+    _execute.store(true);
 
     LOG_INFO("Logger Accumulator init. Flush period ms: " << flush_period_ms << ", limit logs by thread before "
-             << "throttling: " << limit_by_thread << ", throttling time in ms(for heavily spammy threads): "
-             << throttling_time_ms);
+                                                          << "throttling: " << limit_by_thread << ", throttling time in ms(for heavily spammy threads): "
+                                                          << throttling_time_ms);
 
     if (_thd.joinable())
         return;
@@ -55,7 +53,9 @@ void log_accumulator::init(size_t flush_period_ms, size_t limit_by_thread, size_
             try
             {
                 if (!logger::instance().get_force_flush())
+                {
                     flush();
+                }
             }
             catch (const std::exception& e)
             {
@@ -69,6 +69,12 @@ void log_accumulator::init(size_t flush_period_ms, size_t limit_by_thread, size_
 
 void log_accumulator::put(logger::log_message&& msg)
 {
+    if (!_execute)
+    {
+        logger::instance().write(msg);
+        return;
+    }
+
     if (logger::instance().get_force_flush())
     {
         if (!_new_set_force_flush)
@@ -76,15 +82,15 @@ void log_accumulator::put(logger::log_message&& msg)
             static std::mutex guard;
             const std::lock_guard<std::mutex> lock(guard);
 
-            while (_flush_active)
-                std::this_thread::sleep_for(std::chrono::milliseconds(_wait_flush));
+            if (!_new_set_force_flush)
+            {
+                while (_flush_active)
+                    std::this_thread::sleep_for(std::chrono::milliseconds(_wait_flush));
 
-            add_log_msg(std::move(msg));
+                flush();
 
-            flush();
-            flush();
-
-            _new_set_force_flush = true;
+                _new_set_force_flush = true;
+            }
         }
 
         logger::instance().write(msg);
@@ -93,27 +99,26 @@ void log_accumulator::put(logger::log_message&& msg)
 
     _new_set_force_flush = false;
 
-    size_t count_by_thread = (*_active_container_p)[std::this_thread::get_id()].size();
-
     add_log_msg(std::move(msg));
-
-    if (count_by_thread >= _limit_by_thread)
-        std::this_thread::sleep_for(std::chrono::milliseconds(_throttling_time_ms));
 }
 
 void log_accumulator::add_log_msg(logger::log_message&& msg)
 {
     auto thread_id = std::this_thread::get_id();
+    size_t count_by_thread = 0;
 
     _mutex.lock_shared();
 
     auto it = _active_container_p->find(thread_id);
-    auto* pqueue = it == _active_container_p->end() ? nullptr : &it->second;
-
-    if (pqueue)
+    if (it != _active_container_p->end())
     {
-        pqueue->push(std::move(msg));
+        auto& queue = it->second;
+        queue.push(std::move(msg));
+        count_by_thread = queue.size();
         _mutex.unlock_shared();
+
+        if (count_by_thread >= _limit_by_thread)
+            std::this_thread::sleep_for(std::chrono::milliseconds(_throttling_time_ms));
 
         return;
     }

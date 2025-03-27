@@ -39,13 +39,13 @@ private:
 
     std::vector<map_logs> _logs;
 
-    map_logs* _active_container_p;
-    map_logs* _flush_container_p;
+    map_logs* _active_container_p = nullptr;
+    map_logs* _flush_container_p = nullptr;
 
-    std::atomic<bool> _flush_active;
-    std::atomic<bool> _new_set_force_flush;
+    std::atomic<bool> _flush_active = false;
+    std::atomic<bool> _new_set_force_flush = false;
 
-    std::atomic<bool> _execute;
+    std::atomic<bool> _execute = false;
     std::thread _thd;
     std::shared_mutex _mutex;
 
