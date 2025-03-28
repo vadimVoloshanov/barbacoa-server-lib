@@ -170,10 +170,21 @@ void log_accumulator::flush()
 
     _mutex.unlock();
 
-    for (const auto& thread_logs : *_flush_container_p)
+    auto it_thread_logs = _flush_container_p->begin();
+    while (it_thread_logs != _flush_container_p->end())
     {
-        if (thread_logs.second.size() >= _limit_by_thread)
-            LOG_ERROR("Thread " << thread_logs.second.front().context.thread_info.first << " spams logs");
+        const auto& thread_logs = it_thread_logs->second;
+
+        if (thread_logs.empty())
+        {
+            it_thread_logs = _flush_container_p->erase(it_thread_logs);
+            continue;
+        }
+
+        if (thread_logs.size() >= _limit_by_thread)
+            LOG_ERROR("Thread " << thread_logs.front().context.thread_info.first << " spams logs");
+
+        it_thread_logs++;
     }
 
     while (auto thread_ptr = get_oldest_log_thread(_flush_container_p))
