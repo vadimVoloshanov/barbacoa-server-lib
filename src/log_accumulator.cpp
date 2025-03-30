@@ -26,15 +26,13 @@ log_accumulator::~log_accumulator()
     flush();
 }
 
-void log_accumulator::init(size_t flush_period_ms, size_t limit_by_thread, size_t throttling_time_ms, size_t wait_flush,
-                           size_t pre_init_logs_limit)
+void log_accumulator::init(size_t flush_period_ms, size_t limit_by_thread, size_t throttling_time_ms, size_t pre_init_logs_limit)
 {
 #if defined(_USE_LOG_ACCUMULATOR)
 
     _flush_period_ms.store(flush_period_ms);
     _limit_by_thread.store(limit_by_thread);
     _throttling_time_ms.store(throttling_time_ms);
-    _wait_flush.store(wait_flush);
     _execute.store(true);
 
     LOG_INFO("Logger Accumulator init. Flush period ms: " << flush_period_ms << ", limit logs by thread before "
@@ -49,7 +47,7 @@ void log_accumulator::init(size_t flush_period_ms, size_t limit_by_thread, size_
     _thd = std::thread([this]() {
         while (_execute.load())
         {
-            std::this_thread::sleep_for(std::chrono::milliseconds(_flush_period_ms.load()));
+            std::this_thread::sleep_for(std::chrono::milliseconds(_flush_period_ms));
             try
             {
                 if (!logger::instance().get_force_flush())
@@ -84,11 +82,7 @@ void log_accumulator::put(logger::log_message&& msg)
 
             if (!_new_set_force_flush)
             {
-                while (_flush_active)
-                    std::this_thread::sleep_for(std::chrono::milliseconds(_wait_flush));
-
                 flush();
-
                 _new_set_force_flush = true;
             }
         }
@@ -159,15 +153,11 @@ void log_accumulator::release_logs_pre_init(size_t limit)
 
 void log_accumulator::flush()
 {
+    static std::mutex flush_guard;
+    const std::lock_guard<std::mutex> lock(flush_guard);
+
     _mutex.lock();
-
-    if (_flush_active)
-        return;
-
-    _flush_active = true;
-
     std::swap(_active_container_p, _flush_container_p);
-
     _mutex.unlock();
 
     auto it_thread_logs = _flush_container_p->begin();
@@ -192,8 +182,6 @@ void log_accumulator::flush()
         logger::instance().write(thread_ptr->front());
         thread_ptr->pop();
     }
-
-    _flush_active = false;
 }
 
 log_accumulator::logs_thread_ptr log_accumulator::get_oldest_log_thread(map_logs* p)
