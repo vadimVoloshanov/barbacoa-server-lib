@@ -79,7 +79,7 @@ public:
         return _appenders.size();
     }
 
-    bool get_force_flush() const
+    bool is_force_flush_mode() const
     {
         return _force_flush;
     }

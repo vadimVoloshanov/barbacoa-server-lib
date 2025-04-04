@@ -16,7 +16,7 @@ log_accumulator::log_accumulator()
 
 log_accumulator::~log_accumulator()
 {
-    if (_execute)
+    if (_execute.load())
     {
         _execute.store(false);
         if (_thd.joinable())
@@ -50,7 +50,7 @@ void log_accumulator::init(size_t flush_period_ms, size_t limit_by_thread, size_
             std::this_thread::sleep_for(std::chrono::milliseconds(_flush_period_ms));
             try
             {
-                if (!logger::instance().get_force_flush())
+                if (!logger::instance().is_force_flush_mode())
                 {
                     flush();
                 }
@@ -73,7 +73,7 @@ void log_accumulator::put(logger::log_message&& msg)
         return;
     }
 
-    if (logger::instance().get_force_flush())
+    if (logger::instance().is_force_flush_mode())
     {
         if (!_new_set_force_flush)
         {
