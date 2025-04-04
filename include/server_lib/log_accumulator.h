@@ -36,12 +36,10 @@ private:
     void add_log_msg(logger::log_message&& msg);
     void flush();
 
-    logs_thread_ptr get_oldest_log_thread(map_logs* p);
+    logs_thread_ptr get_oldest_log_thread(map_logs& p);
 
-    std::vector<map_logs> _logs;
-
-    map_logs* _active_container_p = nullptr;
-    map_logs* _flush_container_p = nullptr;
+    map_logs _active_container;
+    map_logs _flush_container;
 
     std::atomic<bool> _new_set_force_flush = false;
 
